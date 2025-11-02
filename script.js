@@ -1,290 +1,247 @@
-// Inisiasi peta
-var map = L.map('map').setView([-7.5, 112.5], 8);
+script // ===================== APP SETUP =====================
+// jalankan HTML via server lokal (Live Server) agar .tif/.geojson bisa dimuat
 
-// Tambahkan basemap
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+(function () {
+  // ===================== MAP INIT =====================
+  const map = L.map('map', { zoomControl: true }).setView([-6.9, 107.6], 8);
 
-// Objek untuk menyimpan layer GeoJSON tiap tahun
-var geojsonLayers = {};
+  // ===================== BASEMAPS =====================
+  const osm = L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }
+  );
 
+  const satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}',
+    { maxZoom: 19, attribution: 'Tiles &copy; Esri — World Imagery' }
+  );
 
-//========1.FUNGSI UNTUK MODEL PREDIKSI KEKERINGAN (2025-2035)========//
-// Tahun-tahun yang tersedia
-var years = Array.from({ length: 2035 - 2025 + 1 }, (_, i) => 2025 + i);
+  const terrain = L.tileLayer(
+    'https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg',
+    { maxZoom: 18, attribution: 'Map tiles &copy; Stamen, Data &copy; OpenStreetMap' }
+  );
 
-//// === Fungsi Pewarnaan Berdasarkan Nilai DN === ///
-function getColor(dn) {
-  return dn === 1 ? '#2c7bb6' :   // Sangat Rendah
-         dn === 2 ? '#abd9e9' :   // Rendah
-         dn === 3 ? '#ffffbf' :   // Sedang
-         dn === 4 ? '#fdae61' :   // Tinggi
-         dn === 5 ? '#d7191c' :   // Sangat Tinggi
-         '#ccc'; // Default/Unknown
-}
+  const topographic = L.tileLayer(
+    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    { maxZoom: 17, attribution: 'Map &copy; OpenTopoMap (CC-BY-SA)' }
+  );
 
-// === Fungsi Style untuk GeoJSON === //
-function style(feature) {
-  return {
-    fillColor: getColor(feature.properties?.DN),
-    weight: 1,
-    opacity: 1,
-    color: 'transparant',
-    dashArray: '3',
-    fillOpacity: 0.7
+  // default basemap
+  osm.addTo(map);
+
+  // control basemap (dipindah ke kiri-atas supaya tidak ketimpa panel info)
+  const baseLayers = {
+    '🌐 OpenStreetMap': osm,
+    '🛰 Satellite': satellite,
+    '🏔 Terrain': terrain,
+    '🗺 Topographic': topographic
   };
-}
+  L.control.layers(baseLayers, null, { position: 'topleft', collapsed: false }).addTo(map);
 
-// === Fungsi Memuat GeoJSON dan Simpan ke Layer === //
-function loadGeoJsonLayer(year) {
-  fetch(`Data/PetaPrediksiKekeringan/${year}.geojson`)
-    .then(res => {
-      if (!res.ok) throw new Error(`Gagal memuat ${year}.geojson`);
-      return res.json();
-    })
-    .then(data => {
-      let layer = L.geoJSON(data, {
-        style: style,
-        onEachFeature: (feature, layer) => {
-          const dn = feature.properties?.DN ?? 'N/A';
-          layer.bindPopup(`Tahun: ${year}<br>DN: ${dn}`);
-        }
-      });
-      geojsonLayers[year] = layer;
-    })
-    .catch(err => console.error(err));
-}
+  // ===================== KONTROL TAMBAHAN =====================
+  L.control.scale({ metric: true, imperial: false }).addTo(map);
+  if (L.Control.Geocoder) L.Control.geocoder({ defaultMarkGeocode: true }).addTo(map);
+  if (L.Control.Measure) {
+    new L.Control.Measure({
+      primaryLengthUnit: 'meters',
+      secondaryLengthUnit: 'kilometers',
+      primaryAreaUnit: 'sqmeters',
+      activeColor: '#10b981',
+      completedColor: '#059669'
+    }).addTo(map);
+  }
 
-// === Sidebar Checkbox untuk Mengontrol Layer === //
-const form = document.getElementById("layerForm");
-years.forEach(year => {
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.id = `layer-${year}`;
-  checkbox.value = year;
+  // ===================== HUD KOORDINAT =====================
+  const hud = document.getElementById('hud');
+  if (hud) {
+    map.on('mousemove', e => {
+      hud.textContent = Lat: ${e.latlng.lat.toFixed(6)}, Lng: ${e.latlng.lng.toFixed(6)};
+    });
+  }
 
-  const label = document.createElement("label");
-  label.htmlFor = checkbox.id;
-  label.textContent = ` ${year}`;
+  // ===================== PANEL INFO & MARKER =====================
+  window.toggleInfo = function toggleInfo() {
+    const p = document.getElementById('infoPanel');
+    if (p) p.classList.toggle('hide');
+  };
 
-  const br = document.createElement("br");
-
-  checkbox.addEventListener("change", function () {
-    const layer = geojsonLayers[year];
-    if (this.checked) {
-      if (layer) {
-        layer.addTo(map);
-      }
-    } else {
-      if (layer) {
-        map.removeLayer(layer);
-      }
-    }
+  map.on('click', e => {
+    L.marker(e.latlng)
+      .addTo(map)
+      .bindPopup(Lat: ${e.latlng.lat.toFixed(6)}<br>Lng: ${e.latlng.lng.toFixed(6)})
+      .openPopup();
   });
 
-  form.appendChild(checkbox);
-  form.appendChild(label);
-  form.appendChild(br);
+  // ===================== LEGEND UTILS =====================
+  const legendStack = document.getElementById('legendStack') || (function () {
+    // buat kontainer legend kalau belum ada
+    const div = document.createElement('div');
+    div.id = 'legendStack';
+    div.className = 'legend-stack';
+    // gaya minimal kalau belum ada CSS
+    div.style.position = 'absolute';
+    div.style.right = '16px';
+    div.style.bottom = '64px';
+    div.style.display = 'grid';
+    div.style.gap = '10px';
+    div.style.zIndex = 380;
+    (document.getElementById('map') || document.body).appendChild(div);
+    return div;
+  })();
 
-  // Muat data awal
-  loadGeoJsonLayer(year);
-});
+  const legends = {}; // id -> DOM
 
+  function makeLegend(id, title, colorScale, min, max, unit = '') {
+    removeLegend(id);
+    const el = document.createElement('div');
+    el.className = 'legend';
+    el.id = 'legend-' + id;
+    el.style.background = '#fff';
+    el.style.border = '1px solid #e2e8f0';
+    el.style.borderRadius = '10px';
+    el.style.boxShadow = '0 8px 20px rgba(2,6,23,.12)';
+    el.style.padding = '10px';
+    el.style.minWidth = '180px';
 
-//========2.FUNGSI UNTUK PETA KERAWANAN KEKERINGAN========//
-// ===== Semua Layers dalam satu objek =====
-var layers = {
-  VHI: L.geoJSON(null, {
-    style: feature => ({
-      fillColor: getColorVHI(feature.properties.DN),
-      color: 'transparent',
-      weight: 1,
-      fillOpacity: 1
-    })
-  }),
-  LST: L.geoJSON(null, {
-    style: feature => ({
-      fillColor: getColorLST(feature.properties.DN),
-      color: 'transparent',
-      weight: 1,
-      fillOpacity: 1
-    })
-  }),
-  Kerawanan: L.geoJSON(null, {
-    style: feature => ({
-      fillColor: getColorKer(feature.properties.DN),
-      color: 'transparent',
-      weight: 1,
-      fillOpacity: 1
-    })
-  }),
-  SPD: L.geoJSON(null, {
-    style: feature => ({
-      fillColor: getColorSPD(feature.properties.DN),
-      color: 'transparent',
-      weight: 1,
-      fillOpacity: 1
-    })
-  }),
-  JARAK: L.geoJSON(null, {
-    style: feature => ({
-      fillColor: getColorSPD(feature.properties.DN),
-      color: 'transparent',
-      weight: 1,
-      fillOpacity: 1
-    })
-  })
-};
+    const h = document.createElement('div');
+    h.textContent = title;
+    h.style.fontWeight = '700';
+    h.style.margin = '0 0 8px';
+    el.appendChild(h);
 
-// ===== Muat GeoJSON (pastikan path benar) =====
-fetch('Data/PetaKerawananKekeringan/VHI.geojson')
-  .then(res => res.json()).then(data => layers.VHI.addData(data));
-fetch('Data/PetaKerawananKekeringan/LST(RF).geojson')
-  .then(res => res.json()).then(data => layers.LST.addData(data));
-fetch('Data/PetaKerawananKekeringan/KERAWANAN.geojson')
-  .then(res => res.json()).then(data => layers.Kerawanan.addData(data));
-fetch('Data/SistemPeringatanDiniKekeringan/PERINGATANDINI.geojson')
-  .then(res => res.json()).then(data => layers.SPD.addData(data));
-fetch('Data/SistemPeringatanDiniKekeringan/JARAK.geojson')
-  .then(res => res.json()).then(data => layers.JARAK.addData(data));
+    const bar = document.createElement('div');
+    bar.style.height = '12px';
+    bar.style.borderRadius = '6px';
+    bar.style.border = '1px solid #e2e8f0';
+    bar.style.background = 'linear-gradient(to top, #440154, #21918c, #fde725)'; // fallback
+    try {
+      const cs = plotty.colorscales[colorScale];
+      if (cs && cs.colors) {
+        const stops = cs.colors.map(([p, c]) => ${c} ${Math.round(p * 100)}%).join(', ');
+        bar.style.background = linear-gradient(to top, ${stops});
+      }
+    } catch (e) {}
+    el.appendChild(bar);
 
-// ===== Checkbox Event Handler hanya sekali =====
-document.querySelectorAll('.layer-toggle').forEach(checkbox => {
-  checkbox.addEventListener('change', function () {
-    const layerId = this.dataset.layer;
-    const layer = layers[layerId];
-    if (layer) {
-      if (this.checked) {
+    const scale = document.createElement('div');
+    scale.style.display = 'flex';
+    scale.style.justifyContent = 'space-between';
+    scale.style.fontSize = '.8rem';
+    scale.style.color = '#475569';
+    scale.style.marginTop = '6px';
+    scale.innerHTML = <span>${(min ?? 'min')}</span><span>${unit}</span><span>${(max ?? 'max')}</span>;
+    el.appendChild(scale);
+
+    legendStack.appendChild(el);
+    legends[id] = el;
+  }
+  function removeLegend(id) {
+    if (legends[id]) {
+      legends[id].remove();
+      delete legends[id];
+    }
+  }
+
+  // ===================== GEO-TIFF UTILS =====================
+  async function getTiffStats(url) {
+    try {
+      const tiff = await GeoTIFF.fromUrl(url);
+      const img = await tiff.getImage();
+      const ras = await img.readRasters({ interleave: true, samples: [0] });
+      let min = Infinity, max = -Infinity;
+      for (let i = 0; i < ras.length; i++) {
+        const v = ras[i];
+        if (Number.isFinite(v)) {
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+      }
+      return { min, max };
+    } catch (e) {
+      console.warn('Gagal ambil statistik:', url, e);
+      return { min: undefined, max: undefined };
+    }
+  }
+
+  // ===================== RASTER LAYERS =====================
+  const LAYER_DEF = {
+    dem:   { url: 'Data/AspekLingkungan/DEM',        title: 'DEM (m)',          colorScale: 'terrain',   opacity: 0.7, unit: 'm'  },
+    curah: { url: 'Data/AspekLingkungan/CurahHujan', title: 'Curah Hujan',      colorScale: 'rainbow',   opacity: 0.7, unit: 'mm' },
+    lst:   { url: 'Data/AspekLingkungan/LST',        title: 'LST (°C)',         colorScale: 'jet',       opacity: 0.7, unit: '°C' },
+    ndvi:  { url: 'Data/AspekLingkungan/NDVI',       title: 'NDVI',             colorScale: 'greengold', opacity: 0.6, unit: ''   },
+    ndmi:  { url: 'Data/AspekLingkungan/NDMI',       title: 'NDMI',             colorScale: 'viridis',   opacity: 0.6, unit: ''   },
+    ndwi:  { url: 'Data/AspekLingkungan/NDWI',       title: 'NDWI',             colorScale: 'blues',     opacity: 0.6, unit: ''   }
+  };
+
+  const rasterOpts = (opacity = 0.7, colorScale = 'viridis') => ({
+    opacity,
+    renderer: new L.LeafletGeotiff.Plotty({ colorScale })
+  });
+
+  const lyrDEM   = L.leafletGeotiff(LAYER_DEF.dem.url,   rasterOpts(LAYER_DEF.dem.opacity,   LAYER_DEF.dem.colorScale));
+  const lyrCurah = L.leafletGeotiff(LAYER_DEF.curah.url, rasterOpts(LAYER_DEF.curah.opacity, LAYER_DEF.curah.colorScale));
+  const lyrLST   = L.leafletGeotiff(LAYER_DEF.lst.url,   rasterOpts(LAYER_DEF.lst.opacity,   LAYER_DEF.lst.colorScale));
+  const lyrNDVI  = L.leafletGeotiff(LAYER_DEF.ndvi.url,  rasterOpts(LAYER_DEF.ndvi.opacity,  LAYER_DEF.ndvi.colorScale));
+  const lyrNDMI  = L.leafletGeotiff(LAYER_DEF.ndmi.url,  rasterOpts(LAYER_DEF.ndmi.opacity,  LAYER_DEF.ndmi.colorScale));
+  const lyrNDWI  = L.leafletGeotiff(LAYER_DEF.ndwi.url,  rasterOpts(LAYER_DEF.ndwi.opacity,  LAYER_DEF.ndwi.colorScale));
+
+  const mapLayers = { dem:lyrDEM, curah:lyrCurah, lst:lyrLST, ndvi:lyrNDVI, ndmi:lyrNDMI, ndwi:lyrNDWI };
+
+  function bindRaster(id, sliderId) {
+    const def = LAYER_DEF[id];
+    const layer = mapLayers[id];
+    const chk = document.getElementById(id);
+    const slider = document.getElementById(sliderId);
+
+    if (!chk) { console.warn('Checkbox tidak ditemukan:', id); return; }
+
+    let stats = null;
+
+    chk.addEventListener('change', async () => {
+      if (chk.checked) {
         layer.addTo(map);
+        if (!stats) stats = await getTiffStats(def.url);
+        makeLegend(id, def.title, def.colorScale, stats?.min, stats?.max, def.unit);
       } else {
         map.removeLayer(layer);
+        removeLegend(id);
       }
+    });
+
+    if (slider) {
+      slider.addEventListener('input', () => {
+        layer.setOpacity(parseFloat(slider.value));
+      });
     }
-  });
-});
+  }
 
-// ===== Fungsi Pewarnaan =====
-function getColorVHI(dn) {
-  return dn >= 1 && dn < 2 ? '#C0D6E8' : //sangat rendah
-         dn >= 2 && dn < 3 ? '#2D5C7F' : //rendah
-         dn >= 3 && dn < 4 ? '#FFF1A8' : //sedang
-         dn >= 4 && dn < 5 ? '#FF8F56' : //tinggi
-         dn >= 5 ? '#984A59' : //sangat tinggi
-         '#ccc'; 
-}
+  bindRaster('dem',   'demOpacity');
+  bindRaster('curah', 'curahOpacity');
+  bindRaster('lst',   'lstOpacity');
+  bindRaster('ndvi',  'ndviOpacity');
+  bindRaster('ndmi',  'ndmiOpacity');
+  bindRaster('ndwi',  'ndwiOpacity');
 
-function getColorLST(dn) {
-  return dn >= 1 && dn < 2 ? '#C0D6E8' : //sangat rendah
-         dn >= 2 && dn < 3 ? '#2D5C7F' : //rendah
-         dn >= 3 && dn < 4 ? '#FFF1A8' : //sedang
-         dn >= 4 && dn < 5 ? '#FF8F56' : //tinggi
-         dn >= 5 ? '#984A59' : //sangat tinggi
-         '#ccc';
-}
-
-function getColorKer(dn) {
-  return dn >= 1 && dn < 2 ? '#C0D6E8' : //sangat rendah
-         dn >= 2 && dn < 3 ? '#2D5C7F' : //rendah
-         dn >= 3 && dn < 4 ? '#FFF1A8' : //sedang
-         dn >= 4 && dn < 5 ? '#FF8F56' : //tinggi
-         dn >= 5 ? '#984A59' : //sangat tinggi
-         '#ccc';
-}
-
-function getColorSPD(dn) {
-  return dn === 0 ? '#B9BC6D' :   // Normal
-         dn === 2 ? '#FFE894' :   // Siaga
-         dn === 3 ? '#EF765F' :   // Waspada
-         dn === 4 ? '#95415A' :   // Awas
-         '#ccc';
-}
-
-function getColorJARAK(dn) {
-  return dn === 0 ? '#B9BC6D' :   // Normal
-         dn === 2 ? '#FFE894' :   // Siaga
-         dn === 3 ? '#EF765F' :   // Waspada
-         dn === 4 ? '#95415A' :   // Awas
-         '#ccc';
-}
-
-// Inisialisasi
-var rekomendasiLayers = {};
-var currentRekomendasiLayer = null;
-var loadedLayers = {};  // Menyimpan status loading layer
-
-const bulanList = [
-  "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
-  "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
-];
-
-const getColorByDN = (dn) => {
-  return dn === 0 ? "#95415A" :  //Tidak bisa
-         dn === 2 ? "#B9BC6D" :  //Sangat cocok
-         dn === 3 ? "#FFE894" :  //Cocok
-         dn === 4 ? "#EF765F" :  //Tidak Cocok
-                    "#cccccc";
-};
-
-// Muat GeoJSON untuk setiap bulan
-bulanList.forEach(function (bulan) {
-  fetch(`Data/PetaRekomendasiTanamanAdaptif/${bulan}.geojson`)
-    .then(response => response.json())
+  // ===================== GEOJSON MODEL =====================
+  let lyrModel2025;
+  fetch('ModelPrediksi/MODEL2025.geojson')
+    .then(r => r.json())
     .then(data => {
-      const layer = L.geoJSON(data, {
-        style: function (feature) {
-          const dn = feature.properties.DN;
-          return {
-            color: getColorByDN(dn),
-            weight: 1,
-            fillOpacity: 1
-          };
-        },
-        onEachFeature: function (feature, layer) {
-          const komoditas = feature.properties.komoditas || 'Tanaman';
-          layer.bindPopup(`<strong>Rekomendasi:</strong> ${komoditas}<br><strong>DN:</strong> ${feature.properties.DN}`);
-        }
+      lyrModel2025 = L.geoJSON(data, {
+        style: { color: '#ef4444', weight: 2, fillOpacity: 0.15 }
       });
 
-      rekomendasiLayers[bulan] = layer;
-      loadedLayers[bulan] = true;
+      const chk = document.getElementById('model2025');
+      if (chk) {
+        chk.addEventListener('change', () => {
+          if (chk.checked) {
+            lyrModel2025.addTo(map);
+            try { map.fitBounds(lyrModel2025.getBounds(), { maxZoom: 11 }); } catch (e) {}
+          } else {
+            map.removeLayer(lyrModel2025);
+          }
+        });
+      }
     })
-    .catch(error => {
-      console.warn(`Gagal memuat data bulan ${bulan}:`, error);
-      loadedLayers[bulan] = false;
-    });
-});
-
-document.getElementById('month-selector').addEventListener('change', function () {
-  const selectedMonthIndex = parseInt(this.value) - 1;
-  const selectedMonthName = bulanList[selectedMonthIndex];
-
-  if (currentRekomendasiLayer) {
-    map.removeLayer(currentRekomendasiLayer);
-    currentRekomendasiLayer = null;
-  }
-
-  if (!(selectedMonthName in rekomendasiLayers)) {
-    document.getElementById('monthly-recommendation').innerHTML =
-      `<p><em>Data belum tersedia untuk bulan ini.</em></p>`;
-    legend.getContainer().style.display = "none";
-    return;
-  }
-
-  const newLayer = rekomendasiLayers[selectedMonthName];
-  if (newLayer) {
-    newLayer.addTo(map);
-    currentRekomendasiLayer = newLayer;
-
-    document.getElementById('monthly-recommendation').innerHTML =
-      `<p>Menampilkan rekomendasi tanam untuk bulan <strong>${this.options[this.selectedIndex].text}</strong>.</p>`;
-
-  }
-});
-
-
-
-
-
-
-
+    .catch(() => console.warn('MODEL2025.geojson tidak ditemukan / gagal dimuat.'));
+})();
