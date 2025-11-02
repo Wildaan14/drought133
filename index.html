@@ -1,92 +1,318 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <title>WebGIS Prediksi & Deteksi Dini Kekeringan Pertanian Jawa Timur</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GEOEPIWATCH: PREDICTIVE MODELING OF TROPICAL DISEASE HOTSPOTS THROUGH SATELLITE-BASED INDICATORS</title>
 
-    <!-- 1. Leaflet CSS: Library untuk peta interaktif -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    
-    <!-- 2. Leaflet JS: Library JavaScript untuk peta -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" ></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <!-- 3. Leaflet Control Geocoder (Opsional): Untuk fitur pencarian lokasi -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-    <!-- 4. Custom CSS: File CSS kita sendiri untuk styling -->
-    <link rel="stylesheet" href="style.css">
+  <!-- GeoTIFF + Plotty + Leaflet-Geotiff (URUTAN PENTING) -->
+  <script src="https://unpkg.com/geotiff@2.0.7/dist-browser/geotiff.min.js"></script>
+  <script src="https://unpkg.com/plotty@0.4.4/dist/plotty.min.js"></script>
+  <script src="https://unpkg.com/leaflet-geotiff-2@2.0.0/dist/leaflet-geotiff.min.js"></script>
+  <script src="https://unpkg.com/leaflet-geotiff-2@2.0.0/dist/leaflet-geotiff-plotty.min.js"></script>
 
-    <style>
-        html, body { margin: 0; padding: 0; height: 100%; }
-        #map { height: 100%; width: 100%; }
-      </style>
+  <!-- Geocoder -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+  <style>
+    :root{ --bg:#27548A; --panel:#ffffff; --panel-2:#f1f5f9; --primary:#183B4E; --primary-2:#183B4E; --text:#0f172a; --muted:#64748b; --ring:#e2e8f0; }
+    *{box-sizing:border-box}
+    body{margin:0;background:#F3F3E0;color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,"Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji"}
+    .app{display:grid;grid-template-rows:auto 1fr;min-height:100vh}
+    .topbar{display:flex;align-items:center;gap:.75rem;padding:.85rem 1.25rem;background:var(--panel);border-bottom:1px solid var(--ring);position:sticky;top:0;z-index:30}
+    .brand{display:flex;flex-direction:column}
+    .brand h1{margin:0;font-size:1.05rem;color:#183B4E}
+    .brand small{color:var(--muted)}
+    .main{display:grid;grid-template-columns:320px 1fr;gap:0;height:calc(100vh - 64px)}
+    .sidebar{background:linear-gradient(180deg,#eef2ff 0,#f8fafc 100%);border-right:1px solid var(--ring);padding:12px;overflow:auto}
+    .card{background:var(--panel);border:1px solid var(--ring);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 0 rgba(15,23,42,.03)}
+    .card h3{margin:.25rem 0 8px;font-size:1rem;display:flex;align-items:center;gap:.5rem}
+    .row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--ring);border-radius:10px;margin:8px 0;background:var(--panel-2)}
+    .row .meta{display:flex;align-items:center;gap:.5rem}
+    .row label{font-weight:600}
+    .hint{color:var(--muted);font-size:.85rem}
+    .opacity{display:flex;align-items:center;gap:.5rem;margin-top:6px}
+    #map{width:100%;height:100%}
+    .hud{position:absolute;left:12px;bottom:12px;background:#0b1020;color:#fff;border-radius:8px;padding:6px 10px;font-family:ui-monospace, Menlo, Consolas, "Courier New", monospace;font-size:.85rem;opacity:.95}
+    .info{position:absolute;right:16px;top:16px;width:360px;max-width:92vw;background:var(--panel);border:1px solid var(--ring);border-radius:14px;box-shadow:0 8px 30px rgba(2,6,23,.15);overflow:hidden;z-index:400}
+    .info.hide{display:none}
+    .info header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--ring);background:#f8fafc}
+    .info header h4{margin:0;font-size:1rem}
+    .info .body{padding:14px}
+    .badge{display:inline-flex;align-items:center;gap:.5rem;background:#eaf8ef;color:#065f46;border:1px solid #bbf7d0;padding:8px 10px;border-radius:10px;font-weight:700}
+    .steps{display:grid;gap:10px;margin:12px 0}
+    .step{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:flex-start;background:#f8fafc;border:1px dashed var(--ring);padding:10px;border-radius:10px}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:10px 14px;border-radius:10px;border:1px solid #16a34a;background:var(--primary);color:#fff;font-weight:700;cursor:pointer}
+    .btn:hover{background:#128a3e}
+    .footerNote{position:absolute;right:16px;bottom:12px;background:rgba(255,255,255,.9);border:1px solid var(--ring);padding:6px 10px;border-radius:8px;font-size:.85rem;z-index:250}
+    .legend-stack{position:absolute;right:16px;bottom:64px;display:grid;gap:10px;z-index:380}
+    .legend{background:#fff;border:1px solid var(--ring);border-radius:10px;box-shadow:0 8px 20px rgba(2,6,23,.12);padding:10px;min-width:180px}
+    .legend .title{font-weight:700;margin:0 0 8px}
+    .legend .bar{height:12px;border-radius:6px;border:1px solid var(--ring);background:#eee}
+    .legend .scale{display:flex;justify-content:space-between;font-size:.8rem;color:#475569;margin-top:6px}
+    .leaflet-control-layers{border-radius:12px;overflow:hidden;box-shadow:0 8px 20px rgba(2,6,23,.12);border:1px solid #e2e8f0}
+    .leaflet-control-layers-list label{display:flex;align-items:center;gap:.5rem;font-weight:600}
+    @media (max-width: 960px){
+      .main{grid-template-columns:1fr}
+      .sidebar{position:absolute;z-index:350;width:90vw;max-width:360px;height:calc(100vh - 64px);transform:translateX(-8px)}
+    }
+  </style>
 </head>
 <body>
-    <!-- Header Halaman -->
-    <div id="header">
-        <img src="images/Logo Kelompok.png" alt="Logo ITB" class="logo">
-        <h1>WebGIS Prediksi & Deteksi Dini Kekeringan Pertanian Jawa Timur</h1>
+  <div class="app">
+    <!-- Topbar -->
+    <div class="topbar">
+      <i class="fa-solid fa-globe-asia" style="font-size:20px;color:#27548A"></i>
+      <div class="brand">
+        <h1>GEOEPIWATCH: PREDICTIVE MODELING OF TROPICAL DISEASE HOTSPOTS THROUGH SATELLITE-BASED INDICATORS</h1>
+        <small>🧭 Sistem Informasi Geografis untuk Model Prediksi Risiko Penyakit Tropis</small>
+      </div>
     </div>
 
-    <!-- Area Peta -->
-    <div id="map"></div>
-
-    <!-- Sidebar untuk Kontrol dan Informasi -->
-    <div id="sidebar">
-        <h2>Lapisan Peta</h2>
-        <div id="layers-control">
-            <!-- Checkbox untuk lapisan peta akan ditambahkan di sini oleh JavaScript -->
+    <div class="main">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="card">
+          <h3><i class="fa-solid fa-layer-group"></i> Layer Control</h3>
+          <div class="hint">Aktifkan layer & atur transparansi. Klik peta untuk melihat koordinat.</div>
         </div>
 
-        <h2>Peta Rekomendasi Tanaman Adaptif</h2>
-        <div id="quick-recommendation">
-            <p>Pilih bulan untuk rekomendasi tanam:</p>
-            <select id="month-selector">
-                <option value="1">Januari</option>
-                <option value="2">Februari</option>
-                <option value="3">Maret</option>
-                <option value="4">April</option>
-                <option value="5">Mei</option>
-                <option value="6">Juni</option>
-                <option value="7">Juli</option>
-                <option value="8">Agustus</option>
-                <option value="9">September</option>
-                <option value="10">Oktober</option>
-                <option value="11">November</option>
-                <option value="12">Desember</option>
-            </select>
-            <div id="monthly-recommendation"></div>
+        <!-- Aspek Lingkungan -->
+        <div class="card">
+          <h3><i class="fa-solid fa-leaf"></i> ASPEK LINGKUNGAN</h3>
+
+          <div class="row"><div class="meta"><input type="checkbox" id="dem" /> <label for="dem">DEM.tif</label></div></div>
+          <div class="opacity"><input type="range" id="demOpacity" min="0" max="1" step="0.05" value="0.7" /> <span class="hint">Opacity</span></div>
+
+          <div class="row"><div class="meta"><input type="checkbox" id="curah" /> <label for="curah">CurahHujan.tif</label></div></div>
+          <div class="opacity"><input type="range" id="curahOpacity" min="0" max="1" step="0.05" value="0.7" /> <span class="hint">Opacity</span></div>
+
+          <div class="row"><div class="meta"><input type="checkbox" id="lst" /> <label for="lst">LST.tif</label></div></div>
+          <div class="opacity"><input type="range" id="lstOpacity" min="0" max="1" step="0.05" value="0.7" /> <span class="hint">Opacity</span></div>
+
+          <div class="row"><div class="meta"><input type="checkbox" id="ndvi" /> <label for="ndvi">NDVI.tif</label></div></div>
+          <div class="opacity"><input type="range" id="ndviOpacity" min="0" max="1" step="0.05" value="0.6" /> <span class="hint">Opacity</span></div>
+
+          <div class="row"><div class="meta"><input type="checkbox" id="ndmi" /> <label for="ndmi">NDMI.tif</label></div></div>
+          <div class="opacity"><input type="range" id="ndmiOpacity" min="0" max="1" step="0.05" value="0.6" /> <span class="hint">Opacity</span></div>
+
+          <div class="row"><div class="meta"><input type="checkbox" id="ndwi" /> <label for="ndwi">NDWI.tif</label></div></div>
+          <div class="opacity"><input type="range" id="ndwiOpacity" min="0" max="1" step="0.05" value="0.6" /> <span class="hint">Opacity</span></div>
         </div>
 
-        <h2>Peta Prediksi Kekeringan</h2>
-            <p>Pilih Tahun untuk Model Prediksi:</p>
-            <form id="layerForm">
-              <!-- Checkbox akan diisi lewat JS -->
-            </form>
+        <div class="card">
+          <h3><i class="fa-solid fa-diagram-project"></i> MODEL PREDIKSI</h3>
+          <div class="row"><div class="meta"><input type="checkbox" id="model2025" /> <label for="model2025">MODEL2025.geojson</label></div></div>
+        </div>
 
-        <h2>Peta Kerawanan Kekeringan</h2>
-            <p>Pilih Jenis Analisis Kerawanan:</p>
-            <form id="layerControls">
-                <div>
-                  <label><input type="checkbox" class="layer-toggle" data-layer="VHI"> VHI</label><br>
-                  <label><input type="checkbox" class="layer-toggle" data-layer="LST"> LST</label><br>
-                  <label><input type="checkbox" class="layer-toggle" data-layer="Kerawanan"> Kerawanan</label><br><br>
-                </div>
-            </form>
+        <div class="card">
+          <h3><i class="fa-solid fa-virus-covid"></i> PEMETAAN PERSEBARAN PENYAKIT</h3>
+          <div class="hint">Tambahkan layer dari folder ini jika ada file.</div>
+        </div>
+      </aside>
 
-        <h2>Sistem Peringatan Dini</h2>
-            <form id="layerControls">
-                <div>
-                  <label><input type="checkbox" class="layer-toggle" data-layer="SPD"> Peta Peringatan Dini</label><br>
-                  <label><input type="checkbox" class="layer-toggle" data-layer="JARAK"> Jarak dari Pemukiman</label><br><br>
-                </div>
-            </form>
+      <!-- Map -->
+      <div style="position:relative">
+        <div id="map"></div>
+        <div id="hud" class="hud">Lat: - , Lng: -</div>
+        <div class="legend-stack" id="legendStack"></div>
+        <div class="footerNote">GEOEPIWATCH | Esri, DigitalGlobe, GeoEye, Earthstar Geographics</div>
+
+        <!-- Floating Info Panel -->
+        <div id="infoPanel" class="info">
+          <header>
+            <h4><i class="fa-solid fa-circle-info" style="color:#16a34a"></i> Informasi</h4>
+            <button onclick="toggleInfo()" style="border:none;background:#e2e8f0;border-radius:8px;padding:6px 8px;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>
+          </header>
+          <div class="body">
+            <div class="badge">✅ WELCOME!</div>
+            <p style="margin-top:8px">GEOEPIWATCH: Visualisasi Interaktif dari Model Prediksi Risiko Penyakit Tropis di Jawa Barat</p>
+            <div class="steps">
+              <div class="step"><div><i class="fa-solid fa-square-check" style="color:#16a34a"></i></div><div><b>Pilih Layer:</b> gunakan checkbox di sidebar kiri.</div></div>
+              <div class="step"><div><i class="fa-solid fa-sliders"></i></div><div><b>Atur Transparansi:</b> gunakan slider.</div></div>
+              <div class="step"><div><i class="fa-solid fa-location-crosshairs"></i></div><div><b>Klik Peta:</b> lihat koordinat pada HUD.</div></div>
+            </div>
+            <button class="btn" onclick="toggleInfo()"><i class="fa-solid fa-play"></i> Mulai Eksplorasi</button>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Custom JavaScript: File JavaScript kita sendiri untuk logika peta -->
-    <script src="script.js"></script>
+  <!-- ================ SCRIPT ================= -->
+  <script>
+    // --- Map init ---
+    const map = L.map('map', { zoomControl: true }).setView([-6.9, 107.6], 8);
+
+    // ===== Basemaps =====
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}',
+      { maxZoom: 19, attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics' });
+    const topographic = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      { maxZoom: 17, attribution: 'Map © OpenTopoMap (CC-BY-SA)' });
+
+    osm.addTo(map);
+    L.control.layers(
+      { '🌐 OpenStreetMap':osm, '🛰 Satellite':satellite, '🗺 Topographic':topographic },
+      null, { position:'topleft', collapsed:false }
+    ).addTo(map);
+
+    // ===== Tools =====
+    L.control.scale({ metric:true, imperial:false }).addTo(map);
+    L.Control.geocoder({ defaultMarkGeocode:true }).addTo(map);
+
+    // ===== Legend utils for raster =====
+    const legendStack = document.getElementById('legendStack');
+    const legends = {};
+    function makeLegend(id,title,colorScale,min,max,unit=''){
+      removeLegend(id);
+      const el = document.createElement('div'); el.className='legend'; el.id='legend-'+id;
+      const h = document.createElement('div'); h.className='title'; h.textContent=title; el.appendChild(h);
+      const bar = document.createElement('div'); bar.className='bar';
+      try{
+        const cs = plotty.colorscales[colorScale]||null;
+        bar.style.background = (cs && cs.colors)
+          ? linear-gradient(to top, ${cs.colors.map(([p,c])=>${c} ${Math.round(p*100)}%).join(', ')})
+          : 'linear-gradient(to top, #440154, #21918c, #fde725)';
+      }catch(e){ bar.style.background='linear-gradient(to top, #440154, #21918c, #fde725)'; }
+      el.appendChild(bar);
+      const scale = document.createElement('div'); scale.className='scale';
+      scale.innerHTML = <span>${(min ?? 'min')}</span><span>${unit}</span><span>${(max ?? 'max')}</span>;
+      el.appendChild(scale);
+      legendStack.appendChild(el); legends[id]=el;
+    }
+    function removeLegend(id){ if(legends[id]){ legends[id].remove(); delete legends[id]; } }
+
+    async function getTiffStats(url){
+      try{
+        const tiff = await GeoTIFF.fromUrl(url);
+        const img = await tiff.getImage();
+        const ras = await img.readRasters({ interleave:true, samples:[0] });
+        let min=Infinity, max=-Infinity;
+        for(let i=0;i<ras.length;i++){ const v=ras[i]; if(Number.isFinite(v)){ if(v<min)min=v; if(v>max)max=v; } }
+        return {min,max};
+      }catch(e){ console.warn('Gagal ambil statistik:',url,e); return {min:undefined,max:undefined}; }
+    }
+
+    // ===== GeoTIFF overlays (pakai skala Plotty yang VALID) =====
+    const rasterOpts = (opacity=0.7, colorScale='viridis') => ({
+      opacity,
+      renderer: new L.LeafletGeotiff.Plotty({ colorScale })
+    });
+
+    const LAYER_DEF = {
+      dem:   { url:'Data/AspekLingkungan/DEM.tif',        title:'DEM (m)',     colorScale:'viridis', opacity:0.7, unit:'m'  },
+      curah: { url:'Data/AspekLingkungan/CurahHujan.tif', title:'Curah Hujan', colorScale:'rainbow', opacity:0.7, unit:'mm' },
+      lst:   { url:'Data/AspekLingkungan/LST.tif',        title:'LST (°C)',    colorScale:'jet',     opacity:0.7, unit:'°C' },
+      ndvi:  { url:'Data/AspekLingkungan/NDVI.tif',       title:'NDVI',        colorScale:'viridis', opacity:0.6, unit:''   },
+      ndmi:  { url:'Data/AspekLingkungan/NDMI.tif',       title:'NDMI',        colorScale:'viridis', opacity:0.6, unit:''   },
+      ndwi:  { url:'Data/AspekLingkungan/NDWI.tif',       title:'NDWI',        colorScale:'bluered', opacity:0.6, unit:''   }
+    };
+
+    const lyrDEM   = L.leafletGeotiff(LAYER_DEF.dem.url,   rasterOpts(LAYER_DEF.dem.opacity,   LAYER_DEF.dem.colorScale));
+    const lyrCurah = L.leafletGeotiff(LAYER_DEF.curah.url, rasterOpts(LAYER_DEF.curah.opacity, LAYER_DEF.curah.colorScale));
+    const lyrLST   = L.leafletGeotiff(LAYER_DEF.lst.url,   rasterOpts(LAYER_DEF.lst.opacity,   LAYER_DEF.lst.colorScale));
+    const lyrNDVI  = L.leafletGeotiff(LAYER_DEF.ndvi.url,  rasterOpts(LAYER_DEF.ndvi.opacity,  LAYER_DEF.ndvi.colorScale));
+    const lyrNDMI  = L.leafletGeotiff(LAYER_DEF.ndmi.url,  rasterOpts(LAYER_DEF.ndmi.opacity,  LAYER_DEF.ndmi.colorScale));
+    const lyrNDWI  = L.leafletGeotiff(LAYER_DEF.ndwi.url,  rasterOpts(LAYER_DEF.ndwi.opacity,  LAYER_DEF.ndwi.colorScale));
+
+    const mapLayers = { dem:lyrDEM, curah:lyrCurah, lst:lyrLST, ndvi:lyrNDVI, ndmi:lyrNDMI, ndwi:lyrNDWI };
+
+    function bindRaster(id, sliderId){
+      const def = LAYER_DEF[id], layer = mapLayers[id];
+      const chk = document.getElementById(id), slider = document.getElementById(sliderId);
+      let stats = null;
+      chk.addEventListener('change', async ()=>{
+        if(chk.checked){
+          layer.addTo(map);
+          if(!stats) stats = await getTiffStats(def.url);
+          makeLegend(id, def.title, def.colorScale, stats?.min, stats?.max, def.unit);
+        } else {
+          map.removeLayer(layer);
+          removeLegend(id);
+        }
+      });
+      slider.addEventListener('input', ()=> layer.setOpacity(parseFloat(slider.value)));
+      layer.on('load', ()=>console.log([TIFF] ${id} loaded));
+      layer.on('error', e=>console.error([TIFF] ${id} error, e));
+    }
+    bindRaster('dem','demOpacity'); bindRaster('curah','curahOpacity');
+    bindRaster('lst','lstOpacity'); bindRaster('ndvi','ndviOpacity');
+    bindRaster('ndmi','ndmiOpacity'); bindRaster('ndwi','ndwiOpacity');
+
+    // ====== GeoJSON (kategori) ======
+    // Pemetaan warna kategori
+    function getRiskColor(val){
+      if (val === 'Sangat Rendah') return '#3b82f6';
+      if (val === 'Rendah')        return '#86efac';
+      if (val === 'Sedang')        return '#fef9c3';
+      if (val === 'Tinggi')        return '#fb923c';
+      if (val === 'Sangat Tinggi') return '#ef4444';
+      return '#9ca3af'; // default
+    }
+
+    // Legend khusus GeoJSON (control Leaflet)
+    const riskLegend = L.control({ position:'bottomright' });
+    riskLegend.onAdd = function(){
+      const div = L.DomUtil.create('div','legend');
+      div.innerHTML = '<div class="title">Kelas Risiko</div>';
+      const items = [
+        ['Sangat Rendah','#3b82f6'],
+        ['Rendah','#86efac'],
+        ['Sedang','#fef9c3'],
+        ['Tinggi','#fb923c'],
+        ['Sangat Tinggi','#ef4444']
+      ];
+      items.forEach(([label,color])=>{
+        const row = document.createElement('div');
+        row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.margin='4px 0';
+        row.innerHTML = <span style="display:inline-block;width:18px;height:18px;border:1px solid #999;border-radius:3px;background:${color}"></span> ${label};
+        div.appendChild(row);
+      });
+      return div;
+    };
+    let riskLegendAdded = false;
+
+    let lyrModel2025;
+    fetch('Data/ModelPrediksi/MODEL2025.geojson')
+      .then(r=>{ console.log('[MODEL] status', r.status); return r.json(); })
+      .then(data=>{
+        lyrModel2025 = L.geoJSON(data, {
+          style: f=>({
+            color:'#333',
+            weight:1,
+            fillColor: getRiskColor(f.properties.jabar_indices_mdr_v2_2025),
+            fillOpacity:0.75
+          }),
+          onEachFeature: (feature, layer)=>{
+            const p = feature.properties;
+            const val = p.jabar_indices_mdr_v2_2025;
+            layer.bindPopup(<b>Risiko:</b> ${val}<br>${Object.entries(p).map(([k,v])=><b>${k}</b>: ${v}).join('<br>')});
+          }
+        });
+
+        const chk = document.getElementById('model2025');
+        chk.addEventListener('change', ()=>{
+          if(chk.checked){
+            lyrModel2025.addTo(map);
+            try{ map.fitBounds(lyrModel2025.getBounds(), { maxZoom: 11 }); }catch(e){}
+            if(!riskLegendAdded){ riskLegend.addTo(map); riskLegendAdded = true; }
+          } else {
+            map.removeLayer(lyrModel2025);
+            if(riskLegendAdded){ map.removeControl(riskLegend); riskLegendAdded = false; }
+          }
+        });
+      })
+      .catch(err=>console.error('MODEL2025.geojson gagal dimuat:', err));
+  </script>
 </body>
 </html>
-
-
