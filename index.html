@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SMART URBAN DYNAMICS</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+<style>
+:root{
+  --primary-color:#4CAF50; --secondary-color:#2196F3; --accent-color:#FF5722;
+  --dark-color:#2c3e50; --light-color:#ecf0f1; --shadow:0 4px 15px rgba(0,0,0,.1);
+  --border-radius:12px; --transition:all .3s cubic-bezier(.4,0,.2,1)
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;overflow-x:hidden}
+.header{background:rgba(255,255,255,.95);backdrop-filter:blur(20px);padding:15px 20px;
+  box-shadow:var(--shadow);border-bottom:3px solid var(--primary-color);position:sticky;top:0;z-index:1000}
+.header h1{color:var(--dark-color);font-size:clamp(18px,4vw,28px);font-weight:700;text-align:center;margin-bottom:5px;
+  background:linear-gradient(45deg,var(--primary-color),var(--secondary-color));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header p{color:#7f8c8d;text-align:center;font-size:clamp(12px,2.5vw,16px)}
+.container{display:flex;height:calc(100vh - 85px);gap:15px;padding:15px}
+.mobile-toggle{display:none;position:fixed;top:100px;left:20px;z-index:2000;background:var(--primary-color);
+  color:#fff;border:none;border-radius:50%;width:50px;height:50px;font-size:20px;cursor:pointer;box-shadow:var(--shadow)}
+.sidebar{width:380px;background:rgba(255,255,255,.95);backdrop-filter:blur(20px);border-radius:var(--border-radius);
+  padding:25px;box-shadow:var(--shadow);overflow-y:auto;border:1px solid rgba(255,255,255,.2)}
+.sidebar h3{color:var(--dark-color);margin-bottom:20px;font-size:22px;border-bottom:3px solid var(--primary-color);padding-bottom:10px}
+.layer-group{margin-bottom:25px;border:1px solid rgba(76,175,80,.2);border-radius:var(--border-radius);padding:15px;background:rgba(76,175,80,.05)}
+.layer-group h4{color:var(--dark-color);font-size:16px;margin-bottom:15px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+.layer-item{display:flex;align-items:center;margin-bottom:12px;padding:12px;border-radius:10px;border:1px solid transparent;cursor:pointer}
+.layer-item:hover{background:rgba(76,175,80,.12);border-color:rgba(76,175,80,.3)}
+.layer-item.active{background:rgba(76,175,80,.2);border-color:var(--primary-color)}
+.layer-item input[type=checkbox]{margin-right:12px;transform:scale(1.2);accent-color:var(--primary-color)}
+.layer-item label{flex:1;font-size:14px;color:var(--dark-color)}
+.opacity-control{margin-top:8px;margin-left:30px;display:none;padding:10px;background:rgba(255,255,255,.8);
+  border-radius:8px;border:1px solid rgba(76,175,80,.3)}
+.opacity-control.show{display:block}
+.opacity-control input[type=range]{width:100%;accent-color:var(--primary-color)}
+.map-container{flex:1;border-radius:var(--border-radius);overflow:hidden;box-shadow:var(--shadow);
+  border:1px solid rgba(255,255,255,.2);position:relative}
+#map{height:100%;width:100%}
+.loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,255,255,.98);
+  padding:30px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.3);z-index:10000;display:none;text-align:center}
+.loading-spinner{border:4px solid #f3f3f3;border-top:4px solid var(--primary-color);border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 15px}
+@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+.info-panel{position:absolute;top:20px;right:20px;background:rgba(255,255,255,.95);padding:20px;border-radius:12px;box-shadow:var(--shadow);z-index:1000;display:none;max-width:300px}
+.coord-display{position:absolute;bottom:20px;left:20px;background:rgba(0,0,0,.8);color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;font-family:ui-monospace,Consolas,monospace}
+.legend{position:absolute;bottom:60px;right:20px;background:rgba(255,255,255,.95);padding:15px;border-radius:12px;box-shadow:var(--shadow);z-index:1000;max-width:240px;display:none}
+.legend h5{margin-bottom:8px}
+.legend-item{display:flex;align-items:center;margin-bottom:6px;font-size:12px}
+.legend-color{width:20px;height:15px;margin-right:8px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+/* Toast mini */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:11000;background:#333;color:#fff;padding:10px 14px;border-radius:8px;box-shadow:var(--shadow);display:none}
+.toast.show{display:block}
+.toast.success{background:#2e7d32}.toast.error{background:#c62828}.toast.warning{background:#ef6c00}.toast.info{background:#1565c0}
+@media (max-width:768px){
+  .mobile-toggle{display:block}
+  .container{flex-direction:column;height:100vh;padding:10px}
+  .sidebar{width:100%;max-height:42vh;position:fixed;top:85px;left:-100%;z-index:1500;transition:left .35s}
+  .sidebar.open{left:0}
+  .map-container{height:calc(100vh - 120px)}
+}
+</style>
+</head>
+<body>
+  <div class="header">
+       <h1><i class="fas fa-globe-americas"></i> WebGIS Analisis Laju Urbanisasi di Jabodetabek</h1>
+       <p><i class="fas fa-leaf"></i> Analisis Laju, Tipologi Ekspansi, dan Dampak UHI dengan Menggunakan Nightime Lights, Indeks Landsat, dan CNN Siamese</p>
+    </div>
+
+  <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle Sidebar"><i class="fas fa-bars"></i></button>
+
+  <div class="container">
+    <div class="sidebar" id="sidebar">
+      <h3><i class="fas fa-layer-group"></i> Layer Control</h3>
+      <div class="error-message" id="errorMessage"></div>
+      <div class="success-message" id="successMessage"></div>
+
+      <div class="layer-group">
+        <h4><i class="fas fa-mountain"></i> Data Indeks & Sosial</h4>
+
+        <div class="layer-item">
+          <input type="checkbox" id="ndvi_topo" data-file="ndvi.geojson">
+          <label for="ndvi_topo">NDVI</label>
+        </div>
+        <div class="opacity-control" id="ndvi_topo-opacity">
+          <label>Transparansi: <span id="ndvi_topo-value">70</span>%</label>
+          <input type="range" min="0" max="100" value="70" data-layer="ndvi_topo">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="ndbi" data-file="ndbi.geojson">
+          <label for="ndbi">NDBI</label>
+        </div>
+        <div class="opacity-control" id="ndbi-opacity">
+          <label>Transparansi: <span id="ndbi-value">70</span>%</label>
+          <input type="range" min="0" max="100" value="70" data-layer="ndbi">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="lst" data-file="lst.geojson">
+          <label for="lst">LST</label>
+        </div>
+        <div class="opacity-control" id="lst-opacity">
+          <label>Transparansi: <span id="lst-value">70</span>%</label>
+          <input type="range" min="0" max="100" value="70" data-layer="lst">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="kepadatan" data-file="kepadatan.geojson">
+          <label for="kepadatan">Kepadatan Penduduk (WorldPop)</label>
+        </div>
+        <div class="opacity-control" id="kepadatan-opacity">
+          <label>Transparansi: <span id="kepadatan-value">70</span>%</label>
+          <input type="range" min="0" max="100" value="70" data-layer="kepadatan">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="ntl" data-file="ntl.geojson">
+          <label for="ntl">Nighttime Light</label>
+        </div>
+        <div class="opacity-control" id="ntl-opacity">
+          <label>Transparansi: <span id="ntl-value">70</span>%</label>
+          <input type="range" min="0" max="100" value="70" data-layer="ntl">
+        </div>
+      </div>
+
+      <div class="layer-group">
+        <h4><i class="fas fa-moon"></i> Integrasi Urbanisasi Malam dan Perubahan Tutupan Lahan</h4>
+
+        <div class="layer-item">
+          <input type="checkbox" id="nui" data-file="nui.geojson">
+          <label for="nui">Nighttime Urbanization</label>
+        </div>
+        <div class="opacity-control" id="nui-opacity">
+          <label>Transparansi: <span id="nui-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="nui">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="DeltaLST" data-file="DeltaLST.geojson">
+          <label for="DeltaLST">Perubahan LST</label>
+        </div>
+        <div class="opacity-control" id="DeltaLST-opacity">
+          <label>Transparansi: <span id="DeltaLST-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="DeltaLST">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="DeltaNDVI" data-file="DeltaNDVI.geojson">
+          <label for="DeltaNDVI">Perubahan NDVI</label>
+        </div>
+        <div class="opacity-control" id="DeltaNDVI-opacity">
+          <label>Transparansi: <span id="DeltaNDVI-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="DeltaNDVI">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="DeltaNDBI" data-file="DeltaNDBI.geojson">
+          <label for="DeltaNDBI">Perubahan NDBI</label>
+        </div>
+        <div class="opacity-control" id="DeltaNDBI-opacity">
+          <label>Transparansi: <span id="DeltaNDBI-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="DeltaNDBI">
+        </div>
+      </div>
+
+      <div class="layer-group">
+        <h4><i class="fas fa-city"></i> Pola dan Klasterisasi Ekspansi Kota</h4>
+
+        <div class="layer-item">
+          <input type="checkbox" id="tipologi" data-file="tipologi.geojson">
+          <label for="tipologi">Tipologi Ekspansi</label>
+        </div>
+        <div class="opacity-control" id="tipologi-opacity">
+          <label>Transparansi: <span id="tipologi-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="tipologi">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="hotspot" data-file="hotspotordgi.geojson">
+          <label for="hotspot">Hotspot Ord-Gi*</label>
+        </div>
+        <div class="opacity-control" id="hotspot-opacity">
+          <label>Transparansi: <span id="hotspot-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="hotspot">
+        </div>
+      </div>
+
+      <div class="layer-group">
+        <h4><i class="fas fa-brain"></i> Integrasi Deep Learning dan Validasi Akhir Urbanisasi</h4>
+
+        <div class="layer-item">
+          <input type="checkbox" id="DeltaNTL" data-file="DeltaNTL.geojson">
+          <label for="DeltaNTL"> Probabilitas Perubahan NTL</label>
+        </div>
+        <div class="opacity-control" id="DeltaNTL-opacity">
+          <label>Transparansi: <span id="DeltaNTL-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="DeltaNTL">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="ketidakpastian" data-file="ketidakpastian.geojson">
+          <label for="ketidakpastian">Ketidakpastian (Uncertainty Map)</label>
+        </div>
+        <div class="opacity-control" id="ketidakpastian-opacity">
+          <label>Transparansi: <span id="ketidakpastian-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="ketidakpastian">
+        </div>
+
+        <div class="layer-item">
+          <input type="checkbox" id="CNN" data-file="CNN.geojson">
+          <label for="CNN">Peta Fusi CNN-NUI</label>
+        </div>
+        <div class="opacity-control" id="CNN-opacity">
+          <label>Transparansi: <span id="CNN-value">80</span>%</label>
+          <input type="range" min="0" max="100" value="80" data-layer="CNN">
+        </div>
+      </div>
+    </div>
+
+    <div class="map-container">
+      <div id="map"></div>
+      <div class="coord-display" id="coordDisplay"><i class="fas fa-crosshairs"></i> Lat: -, Lng: -</div>
+      <div class="legend" id="legend"><h5><i class="fas fa-palette"></i> Legend</h5><div id="legendContent"></div></div>
+
+      <!-- Info Panel & Toast (dibutuhkan UI helpers) -->
+      <div class="info-panel" id="infoPanel"><div id="infoContent"></div></div>
+      <div class="toast" id="toast"><span id="toastContent"></span></div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Memuat layer...</div>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+class EnhancedGeospatialApp{
+  constructor(){
+    this.map=null;
+    this.layers=new Map(); // id -> L.GeoJSON
+    this.meta=new Map();   // id -> info legend/stat
+    this.isMobile=window.innerWidth<=768;
+    this.init();
+  }
+
+  init(){
+    this.initMap();
+    this.bindUI();
+    this.handleResize();
+    this.showWelcomeMessage();
+  }
+
+  initMap(){
+    this.map = L.map('map', { zoomControl: false }).setView([-6.2, 106.8], this.isMobile ? 9 : 10);
+    L.control.zoom({ position: 'topright' }).addTo(this.map);
+
+    const base = {
+      '🌍 OpenStreetMap': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+      }),
+      '🛰️ Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 18
+      }),
+      '🏔️ Terrain': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data: © OpenStreetMap contributors, SRTM | Style: © OpenTopoMap', maxZoom: 16
+      })
+    };
+
+    base['🛰️ Satellite'].addTo(this.map);
+    L.control.layers(base, null, { position: 'topright', collapsed: this.isMobile }).addTo(this.map);
+    this.map.on('mousemove', e => this.updateCoordinateDisplay(e.latlng));
+  }
+
+  bindUI(){
+    // checkboxes
+    document.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+      cb.addEventListener('change', async e=>{
+        const id=e.target.id; const file=e.target.dataset.file;
+        const item=e.target.closest('.layer-item');
+        if(e.target.checked){ item.classList.add('active'); await this.loadLayer(id,file); this.showOpacityControl(id,true); this.showLayerDetails(item); }
+        else{ item.classList.remove('active'); this.removeLayer(id); this.showOpacityControl(id,false); }
+      });
+    });
+    // opacity sliders
+    document.querySelectorAll('input[type=range]').forEach(sl=>{
+      sl.addEventListener('input',e=>{
+        const id=e.target.dataset.layer; const op=e.target.value/100;
+        const span=document.getElementById(`${id}-value`); if(span) span.textContent=e.target.value;
+        if(this.layers.has(id)){
+          const g=this.layers.get(id);
+          g.setStyle?.({fillOpacity:op,opacity:op});
+          g.eachLayer?.(l=>l.setStyle&&l.setStyle({fillOpacity:op,opacity:op}));
+        }
+      });
+    });
+    // mobile sidebar
+    const toggle=document.getElementById('mobileToggle'); const sidebar=document.getElementById('sidebar');
+    toggle.addEventListener('click',()=>{sidebar.classList.toggle('open'); toggle.innerHTML=sidebar.classList.contains('open')?'<i class="fas fa-times"></i>':'<i class="fas fa-bars"></i>';});
+  }
+
+  // ===== UI helpers (disisipkan) =====
+  removeLayer(layerId){
+    if (this.layers.has(layerId)) {
+      const lyr = this.layers.get(layerId);
+      this.map.removeLayer(lyr);
+      this.layers.delete(layerId);
+      this.meta.delete(layerId);
+      this.showToast(`Layer ${this.getLayerName(layerId)} dihapus`, 'info');
+    }
+    this.showOpacityControl(layerId, false);
+    if (this.layers.size === 0) {
+      const legend = document.getElementById('legend');
+      legend.style.display = 'none';
+    }
+  }
+
+  showOpacityControl(layerId, show){
+    const opacityControl = document.getElementById(`${layerId}-opacity`);
+    if (opacityControl) opacityControl.classList.toggle('show', !!show);
+  }
+
+  updateCoordinateDisplay(latlng){
+    const coordDisplay = document.getElementById('coordDisplay');
+    const lat = latlng.lat.toFixed(6); const lng = latlng.lng.toFixed(6);
+    coordDisplay.innerHTML = `<i class="fas fa-crosshairs"></i> <strong>Lat:</strong> ${lat}, <strong>Lng:</strong> ${lng}`;
+    this.currentCoords = { lat, lng };
+  }
+
+  showLocationInfo(latlng){
+    const info = { coordinates: `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`, activeLayersCount: this.layers.size };
+    const infoPanel = document.getElementById('infoPanel');
+    const infoContent = document.getElementById('infoContent');
+    infoContent.innerHTML = `
+      <div style="margin-bottom: 15px;">
+        <strong><i class="fas fa-map-marker-alt"></i> Koordinat:</strong><br>
+        <code style="background:#f8f9fa; padding:4px 8px; border-radius:4px; font-size:12px;">${info.coordinates}</code>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <strong><i class="fas fa-layer-group"></i> Layer aktif:</strong> ${info.activeLayersCount}
+      </div>
+      <div style="color:#666; font-size:12px;">
+        <i class="fas fa-info-circle"></i> Klik fitur pada peta untuk melihat nilai <code></code> di popup (jika tersedia).
+      </div>`;
+    infoPanel.style.display = 'block';
+    setTimeout(()=>{ if (infoPanel.style.display==='block') infoPanel.style.display='none'; }, 12000);
+  }
+
+  getInitialOpacity(layerId){
+    const s=document.querySelector(`input[data-layer="${layerId}"]`);
+    return s ? s.value/100 : 0.7;
+  }
+
+  getLayerName(layerId){
+    const labelElement = document.querySelector(`label[for="${layerId}"]`);
+    return labelElement ? labelElement.textContent : layerId;
+  }
+
+  showLoading(show, message='Memuat data...'){
+    const loading = document.getElementById('loading');
+    const loadingText = loading.querySelector('.loading-text');
+    if (show){ loadingText.textContent = message; loading.style.display='block'; }
+    else loading.style.display='none';
+  }
+
+  showError(message){
+    const errorDiv = document.getElementById('errorMessage');
+    errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>Error:</strong> ${message}`;
+    errorDiv.style.display = 'block';
+    setTimeout(()=>{ errorDiv.style.display='none'; }, 10000);
+  }
+  hideError(){ const errorDiv=document.getElementById('errorMessage'); errorDiv.style.display='none'; }
+
+  showSuccess(message){
+    const successDiv=document.getElementById('successMessage'); if(!successDiv) return;
+    successDiv.innerHTML = `<i class="fas fa-check-circle"></i> <strong>Berhasil:</strong> ${message}`;
+    successDiv.style.display='block';
+    setTimeout(()=>{ successDiv.style.display='none'; }, 5000);
+  }
+
+  showToast(message,type='info'){
+    const toast=document.getElementById('toast');
+    const toastContent=document.getElementById('toastContent');
+    const icons={success:'fas fa-check-circle',error:'fas fa-exclamation-circle',warning:'fas fa-exclamation-triangle',info:'fas fa-info-circle'};
+    toastContent.innerHTML=`<i class="${icons[type]||icons.info}"></i> ${message}`;
+    toast.className=`toast ${type} show`;
+    setTimeout(()=>toast.classList.remove('show'),4000);
+  }
+
+  handleResize(){
+    window.addEventListener('resize',()=>{
+      const wasMobile=this.isMobile;
+      this.isMobile=window.innerWidth<=768;
+      if(wasMobile!==this.isMobile){
+        setTimeout(()=>this.map.invalidateSize(),300);
+        if(!this.isMobile){
+          const sidebar=document.getElementById('sidebar');
+          sidebar.classList.remove('open');
+          document.getElementById('mobileToggle').innerHTML='<i class="fas fa-bars"></i>';
+        }
+      }
+    });
+  }
+
+  showWelcomeMessage(){
+    const infoPanel=document.getElementById('infoPanel');
+    const infoContent=document.getElementById('infoContent');
+    infoContent.innerHTML=`
+      <div style="text-align:center; padding:10px;">
+        <h4 style="color: var(--primary-color); margin-bottom: 15px;">
+          <i class="fas fa-rocket"></i> Selamat Datang!
+        </h4>
+        <div style="background: linear-gradient(135deg, rgba(76,175,80,0.1), rgba(33,150,243,0.1)); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+          <p style="margin-bottom: 10px; font-weight: 500;"><strong>WebGIS Analisis Laju Urbanisasi di Jabodetabek</strong></p>
+          <p style="font-size: 14px; color: #666; line-height: 1.4;">
+            Sistem Informasi Interaktif untuk analisis laju urbanisasi, tipologi ekspansi, dan dampak UHi di Jabodetabek
+          </p>
+        </div>
+        <div style="text-align: left; font-size: 13px;">
+          <div style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.7); border-radius: 6px; border-left: 3px solid var(--primary-color);">
+            <i class="fas fa-mouse-pointer" style="color: var(--secondary-color);"></i><strong> Pilih Layer:</strong> Aktifkan Checkbox untuk menampilkan layer melalui sidebar kiri
+          </div>
+          <div style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.7); border-radius: 6px; border-left: 3px solid var(--secondary-color);">
+            <i class="fas fa-sliders-h" style="color: var(--primary-color);"></i><strong> Atur Transparansi:</strong> Gunakan slider opacity untuk mengatur transparansi
+          </div>
+          <div style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.7); border-radius: 6px; border-left: 3px solid var(--accent-color);">
+            <i class="fas fa-map-marker-alt" style="color: var(--accent-color);"></i><strong> Klik Fitur:</strong> Pop-up dari peta akan menampilkan nilai atau informasi <code></code> 
+          </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <button onclick="closeInfoPanel()" style="background: var(--primary-color); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+            <i class="fas fa-check"></i> Mulai Eksplorasi
+          </button>
+        </div>
+      </div>`;
+    infoPanel.style.display='block';
+  }
+
+  // ====== Data loading & styling  ======
+  async fetchGeoJSON(filename){
+    const ensureExt=(n)=>/\.geojson$|\.geojsn$/i.test(n)?n:`${n}.geojson`;
+    const f=ensureExt(filename||'');
+    const paths=[`geojsn/${f}`,`geojson/${f}`];
+    for(const p of paths){ const r=await fetch(p,{cache:'no-store'}); if(r.ok) return {json: await r.json(), path:p}; }
+    throw new Error(`File tidak ditemukan di 'geojsn/' maupun 'geojson/': ${f}`);
+  }
+
+  async loadLayer(layerId, filename){
+    this.showLoading(true,'Memuat data...');
+    try{
+      const {json:gj, path} = await this.fetchGeoJSON(filename);
+      const op=this.getInitialOpacity(layerId);
+
+      if(layerId==='tipologi'){
+        gj.features=(gj.features||[]).filter(f=>{
+          const v=f?.properties?.pinggiran; return v!==null && v!==undefined && String(v).trim()!=='';
+        });
+        const geo=L.geoJSON(gj,{
+          style:(ft)=>this.styleTipologi(ft,op),
+          onEachFeature:(ft,ly)=>{
+            const nm=ft?.properties?.name||ft?.properties?.NAMOBJ||'Fitur';
+            ly.bindPopup(`<strong>Tipologi</strong><br>${nm}<br><code>${ft.properties.pinggiran}</code>`);
+          }
+        }).addTo(this.map);
+        this.layers.set(layerId,geo);
+        this.meta.set(layerId,{type:'categorical',field:'pinggiran',path});
+        if(geo.getBounds()?.isValid()) this.map.fitBounds(geo.getBounds(),{padding:[20,20]});
+        this.updateLegendTipologi(); return;
+      }
+
+      if(layerId==='hotspot'){
+        gj.features=(gj.features||[]).filter(f=>Number.isFinite(Number(f?.properties?.Gi_Bin)));
+        const geo=L.geoJSON(gj,{
+          style:(ft)=>this.styleGiBin(ft,op),
+          onEachFeature:(ft,ly)=>{
+            const nm=ft?.properties?.name||ft?.properties?.NAMOBJ||'Fitur';
+            ly.bindPopup(`<strong>Hotspot (Gi_Bin)</strong><br>${nm}<br><code>Gi_Bin: ${ft.properties.Gi_Bin}</code>`);
+          }
+        }).addTo(this.map);
+        this.layers.set(layerId,geo);
+        this.meta.set(layerId,{type:'gi_bin',field:'Gi_Bin',path});
+        if(geo.getBounds()?.isValid()) this.map.fitBounds(geo.getBounds(),{padding:[20,20]});
+        this.updateLegendGiBin(); return;
+      }
+
+      gj.features=(gj.features||[]).filter(f=>{
+        const v=f?.properties?._mean; return v!==null && v!==undefined && isFinite(v);
+      });
+      const vals=gj.features.map(f=>Number(f.properties._mean));
+      let breaks=null, stats=null, palette=this.getPalette(layerId);
+      const styleDefault={color:'#333',weight:.8,fillColor:'#4caf50',fillOpacity:op,opacity:op};
+      let styleFn=()=>styleDefault;
+
+      if(vals.length>0){
+        breaks=this.quantileBreaks(vals,4);
+        stats={min:Math.min(...vals),max:Math.max(...vals),mean:vals.reduce((a,b)=>a+b,0)/vals.length,count:vals.length};
+        styleFn=(ft)=>{
+          const v=Number(ft?.properties?._mean);
+          const cls=this.classOf(v,breaks);
+          const fill=palette[cls]||palette[palette.length-1];
+          return {color:'#333',weight:.8,fillColor:fill,fillOpacity:op,opacity:op};
+        };
+      }
+
+      const geo=L.geoJSON(gj,{style:styleFn, onEachFeature:(ft,ly)=>{
+        const nm=ft?.properties?.name||ft?.properties?.NAMOBJ||'Fitur';
+        const mv=ft?.properties?._mean;
+        ly.bindPopup(`<strong>${this.pretty(layerId)}</strong><br>${nm}<br><code>_mean: ${isFinite(mv)?Number(mv).toFixed(4):'-'}</code>`);
+      }}).addTo(this.map);
+
+      this.layers.set(layerId,geo);
+      this.meta.set(layerId,{type:'_mean',breaks,stats,palette,path});
+
+      if(geo.getBounds()?.isValid()) this.map.fitBounds(geo.getBounds(),{padding:[20,20]});
+      if(breaks&&stats) this.updateLegendChoropleth(this.pretty(layerId),breaks,palette,stats);
+      else this.updateLegendSimple(this.pretty(layerId));
+      this.showSuccess(`Layer ${this.getLayerName(layerId)} dimuat`);
+    }catch(err){
+      this.showError(err.message||err);
+      const cb=document.getElementById(layerId); if(cb){cb.checked=false; cb.closest('.layer-item')?.classList.remove('active');}
+    }finally{
+      this.showLoading(false);
+    }
+  }
+
+  // ===== Palettes & styles (tetap) =====
+  getPalette(id){
+    const p={
+      ndvi_topo:['#edf8fb','#b2e2e2','#66c2a4','#238b45'],
+      ndbi:['#f1eef6','#bdc9e1','#74a9cf','#0570b0'],
+      lst:['#fff7ec','#fee8c8','#fdbb84','#e34a33'],
+      kepadatan:['#f7fbff','#c6dbef','#6baed6','#2171b5'],
+      ntl:['#000000','#444444','#FFD700','#FFFFFF'],
+      nui: ['#d9f0a3','#78c679','#41b6c4','#253494'],
+      DeltaLST :['#fff7ec','#fee8c8','#fdbb84','#e34a33'],
+      DeltaNDVI:['#edf8fb','#b2e2e2','#66c2a4','#238b45'],
+      DeltaNDBI :['#f1eef6','#bdc9e1','#74a9cf','#0570b0'],
+      DeltaNTL : ['#fee5d9','#fcae91','#fb6a4a','#cb181d'],
+      ketidakpastian:['#E5F1F5','#9CB2D0','#8D74AD','#830A7A'],
+      CNN : ['#3C3C3C', '#CFCFCF', '#F8C6AD', '#C61021'],
+    };
+    return p[id] || ['#f7f7f7','#cccccc','#969696','#525252'];
+  }
+  styleTipologi(ft,op){
+    const raw=(ft?.properties?.pinggiran??'').toString().toLowerCase().trim();
+    const key=raw.replace('densificat','densification').replace('linear cor','linear corridor');
+    const colors={ 'densification':'#FFFCC4','linear corridor':'#B23A7F','sprawl':'#3B0B77','stable':'#000000' };
+    const fill=colors[key]||'#9e9e9e';
+    return {color:'#333',weight:.8,fillColor:fill,fillOpacity:op,opacity:op};
+  }
+  styleGiBin(ft,op){
+    const b=String(Number(ft?.properties?.Gi_Bin));
+    const pal={'-3':'#0B4F8A','-2':'#5AA9E6','-1':'#A9D6E5','0':'#FFFFFF','1':'#FDD5C2','2':'#F46D43','3':'#D73027'};
+    const fill=pal[b]??'#CCCCCC';
+    return {color:'#333',weight:.8,fillColor:fill,fillOpacity:op,opacity:op};
+  }
+
+  // ===== Quantile & legend (tetap) =====
+  quantileBreaks(values,k=4){
+    const v=values.filter(x=>isFinite(x)).sort((a,b)=>a-b);
+    if(!v.length) return [];
+    const br=[]; for(let i=1;i<k;i++){ const pos=i*(v.length-1)/k, lo=Math.floor(pos), hi=Math.ceil(pos), t=pos-lo; br.push((1-t)*v[lo]+t*v[hi]); }
+    return br;
+  }
+  classOf(v,br){ if(!br?.length || !isFinite(v)) return 0; if(v<=br[0])return 0; if(v<=br[1])return 1; if(v<=br[2])return 2; return 3; }
+
+  updateLegendChoropleth(title,breaks,palette,stats){
+    const Lg=document.getElementById('legend'), C=document.getElementById('legendContent');
+    const f=x=>Number(x).toFixed(3);
+    const ranges=[`≤ ${f(breaks[0])}`,`${f(breaks[0])} – ${f(breaks[1])}`,`${f(breaks[1])} – ${f(breaks[2])}`,`> ${f(breaks[2])}`];
+    let html=`<div style="font-weight:700;color:var(--primary-color);margin-bottom:6px">${title}</div>`;
+    for(let i=0;i<4;i++){ html+=`<div class="legend-item"><div class="legend-color" style="background:${palette[i]}"></div><span>${ranges[i]}</span></div>`; }
+    html+=`<div style="margin-top:6px;font-size:11px;color:#555"><b>Min</b> ${f(stats.min)} &nbsp; <b>Max</b> ${f(stats.max)} &nbsp; <b>N</b> ${stats.count}</div>`;
+    C.innerHTML=html; Lg.style.display='block';
+  }
+  updateLegendSimple(title){
+    const Lg=document.getElementById('legend'), C=document.getElementById('legendContent');
+    C.innerHTML=`<div style="font-weight:700;color:var(--primary-color);margin-bottom:6px">${title}</div>
+      <div class="legend-item"><div class="legend-color" style="background:#4caf50"></div><span>Fitur</span></div>`;
+    Lg.style.display='block';
+  }
+  updateLegendTipologi(){
+    const Lg=document.getElementById('legend'), C=document.getElementById('legendContent');
+    const items=[{label:'Densification',color:'#FFFCC4'},{label:'Linear Corridor',color:'#B23A7F'},{label:'Sprawl',color:'#3B0B77'},{label:'Stable',color:'#000000'}];
+    let html=`<div style="font-weight:700;color:var(--primary-color);margin-bottom:6px">Tipologi</div>`;
+    items.forEach(i=>{ html+=`<div class="legend-item"><div class="legend-color" style="background:${i.color}"></div><span>${i.label}</span></div>`;});
+    C.innerHTML=html; Lg.style.display='block';
+  }
+  updateLegendGiBin() {
+    const Lg=document.getElementById('legend'); const C=document.getElementById('legendContent');
+    const order=[{"-3":"#0B4F8A"},{"-2":"#5AA9E6"},{"-1":"#A9D6E5"},{"0":"#FFFFFF"},{"1":"#FDD5C2"},{"2":"#F46D43"},{"3":"#D73027"}];
+    let html=`<div style="font-weight:700;color:var(--primary-color);margin-bottom:6px">Hotspot</div>`;
+    order.forEach(o=>{ const k=Object.keys(o)[0]; html+=`<div class="legend-item"><div class="legend-color" style="background:${o[k]}"></div><span>${k}</span></div>`;});
+    C.innerHTML=html; Lg.style.display='block';
+  }
+
+  pretty(id){ return ({ndvi_topo:'NDVI',ndbi:'NDBI',lst:'LST',kepadatan:'Kepadatan',ntl:'Nighttime Light'})[id]||id; }
+}
+
+// Global: close info panel
+function closeInfoPanel(){ document.getElementById('infoPanel').style.display='none'; }
+
+// Init (loading splash + app)
+document.addEventListener('DOMContentLoaded', () => {
+  const loading = document.getElementById('loading');
+  loading.style.display = 'block';
+  setTimeout(() => {
+    loading.style.display = 'none';
+    new EnhancedGeospatialApp();
+  }, 800);
+});
+
+// Fullscreen button
+document.addEventListener('DOMContentLoaded', () => {
+  const fullscreenButton = document.createElement('button');
+  fullscreenButton.innerHTML = '<i class="fas fa-expand"></i>';
+  fullscreenButton.className = 'custom-control-button';
+  fullscreenButton.style.cssText = `
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    background: white; border: none; border-radius: 6px; padding: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1); cursor: pointer; font-size: 14px; color: #333;`;
+  fullscreenButton.addEventListener('click', () => {
+    if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); fullscreenButton.innerHTML = '<i class="fas fa-compress"></i>'; }
+    else { document.exitFullscreen(); fullscreenButton.innerHTML = '<i class="fas fa-expand"></i>'; }
+  });
+  document.querySelector('.map-container').appendChild(fullscreenButton);
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeInfoPanel();
+    const toast = document.getElementById('toast'); toast.classList.remove('show');
+  }
+  if (e.key === 'F11') {
+    e.preventDefault();
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+  if (e.ctrlKey && e.key === 'h' && window.innerWidth > 768) {
+    e.preventDefault();
+    const sidebar = document.getElementById('sidebar');
+    sidebar.style.display = sidebar.style.display === 'none' ? 'block' : 'none';
+  }
+});
+</script>
+</body>
+</html>
